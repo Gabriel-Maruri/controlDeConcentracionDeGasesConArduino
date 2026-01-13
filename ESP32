@@ -1,0 +1,138 @@
+#define BLYNK_TEMPLATE_ID "TMPL2ZnfA-IVm"
+#define BLYNK_TEMPLATE_NAME "ProyectoMICS"
+#define BLYNK_AUTH_TOKEN "GO3XL7kK4IjBK-Ke5qkRsSSpwq1wr35j"
+
+
+#define BLYNK_PRINT Serial
+#include <DHTesp.h>
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <HTTPClient.h>
+
+const char* ssid = "DAVID";
+const char* password = "0987019816";
+const char* serverName = "http://monitoreogasesdvepc.com/insertar.php";
+
+#define RXD2 16
+#define TXD2 17
+#define DHT_PIN 15
+#define LED_VERDE 5
+#define LED_AMARILLO 18
+#define LED_ROJO 19
+
+DHTesp dhtSensor;
+
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  
+  pinMode(LED_VERDE, OUTPUT);
+  pinMode(LED_AMARILLO, OUTPUT);
+  pinMode(LED_ROJO, OUTPUT);
+  dhtSensor.setup(DHT_PIN, DHTesp::DHT22);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Conectando WiFi");
+  while(WiFi.status() != WL_CONNECTED) {
+    delay(500); Serial.print(".");
+  }
+  Serial.println("\nWiFi Conectado!");
+  Blynk.config(BLYNK_AUTH_TOKEN);
+}
+
+void loop() {
+
+  Blynk.run();
+  if (Serial2.available()) {
+    String linea = Serial2.readStringUntil('\n');
+    linea.trim();
+    
+    int c1 = linea.indexOf(',');
+    int c2 = linea.indexOf(',', c1 + 1);
+    int c3 = linea.indexOf(',', c2 + 1);
+    int c4 = linea.indexOf(',', c3 + 1);
+    int c5 = linea.indexOf(',', c4 + 1);
+    if (c5 > 0) {
+      String strCO = linea.substring(0, c1);
+      String strCH4 = linea.substring(c1 + 1, c2);
+      String strEtanol = linea.substring(c2 + 1, c3);
+      String strH2 = linea.substring(c3 + 1, c4);
+      String strNH3 = linea.substring(c4 + 1, c5);
+      String strGeneral = linea.substring(c5 + 1);
+
+
+      float temp = dhtSensor.getTemperature();
+      float hum = dhtSensor.getHumidity();
+      if (isnan(temp)) { temp=0; hum=0; }
+
+      Blynk.virtualWrite(V0, hum);
+      Blynk.virtualWrite(V1, temp);  
+      Blynk.virtualWrite(V2, strCO.toFloat()); 
+      Blynk.virtualWrite(V3, strEtanol.toFloat());
+      Blynk.virtualWrite(V4, strCH4.toFloat());    
+      Blynk.virtualWrite(V5, strH2.toFloat());  
+      Blynk.virtualWrite(V6, strNH3.toFloat());
+      Blynk.virtualWrite(V7, strGeneral.toFloat()); 
+      Blynk.virtualWrite(V8, digitalRead(LED_VERDE) * 255);   
+      Blynk.virtualWrite(V9, digitalRead(LED_AMARILLO) * 255); 
+      Blynk.virtualWrite(V10, digitalRead(LED_ROJO) * 255);
+
+
+
+      if(WiFi.status() == WL_CONNECTED){
+        HTTPClient http;
+        http.begin(serverName);
+        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+        String postData = "co=" + strCO + 
+                          "&metano=" + strCH4 + 
+                          "&etanol=" + strEtanol + 
+                          "&h2=" + strH2 + 
+                          "&nh3=" + strNH3 + 
+                          "&temp=" + String(temp) + 
+                          "&hum=" + String(hum) +
+                          "&general=" + strGeneral;
+        
+        Serial.println("Enviando: " + postData);
+        
+        int codigo = http.POST(postData);
+        
+        if (codigo > 0) {
+          String respuesta = http.getString();
+          Serial.println("Codigo HTTP: " + String(codigo));
+          Serial.println("--- EL SERVIDOR DICE: ---");
+          Serial.println(respuesta); 
+          Serial.println("-------------------------");
+        } else {
+          Serial.print("Error en la petición: ");
+          Serial.println(codigo);
+        }
+        http.end();
+      }
+      
+      float gasecitoGeneral = strGeneral.toFloat();
+
+      if (gasecitoGeneral >= 0 && gasecitoGeneral <= 350 ) {
+        digitalWrite(LED_VERDE, HIGH); 
+        Blynk.virtualWrite(V8, 255);
+      }else {
+        digitalWrite(LED_VERDE, LOW); Blynk.virtualWrite(V8, 0);
+      }
+      if (gasecitoGeneral > 350 && gasecitoGeneral <= 700 ) {
+        digitalWrite(LED_AMARILLO, HIGH); 
+        Blynk.virtualWrite(V9, 255);
+      } else {
+        digitalWrite(LED_AMARILLO, LOW); 
+        Blynk.virtualWrite(V9, 0);
+      }
+      if (gasecitoGeneral > 700){
+        digitalWrite(LED_ROJO, HIGH);
+         Blynk.virtualWrite(V10, 255);
+      } else {
+        digitalWrite(LED_ROJO, LOW); 
+        Blynk.virtualWrite(V10, 0);
+      }
+    }
+  }
+}
