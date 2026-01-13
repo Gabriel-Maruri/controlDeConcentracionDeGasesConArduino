@@ -1,0 +1,70 @@
+#include "DFRobot_MICS.h"
+#include <SoftwareSerial.h>
+
+#define CALIBRATION_TIME   2    
+#define ADC_PIN            A0   
+#define POWER_PIN          2    
+
+DFRobot_MICS_ADC mics(ADC_PIN, POWER_PIN);
+
+SoftwareSerial espSerial(8, 3); 
+
+void setup() {
+  Serial.begin(115200);
+  espSerial.begin(9600);
+  
+  while (!Serial); 
+  
+  while (!mics.begin()) {
+    Serial.println("No devices found! Please check the connections.");
+    delay(1000);
+  }
+  Serial.println("Device connected successfully!");
+
+  uint8_t mode = mics.getPowerState();
+  if (mode == SLEEP_MODE) {
+    mics.wakeUpMode();
+    Serial.println("Sensor woken up successfully!");
+  } else {
+    Serial.println("Sensor is already in wake-up mode.");
+  }
+
+  while (!mics.warmUpTime(CALIBRATION_TIME)) {
+    Serial.println("Please wait until the warm-up time is over!");
+    delay(1000);
+  }
+  Serial.println("Sensor is ready for use.");
+}
+
+void loop() {
+
+  float co = mics.getGasData(CO);
+  float ch4 = mics.getGasData(CH4);
+  float etan = mics.getGasData(C2H5OH);
+  float h2 = mics.getGasData(H2);
+  float nh3 = mics.getGasData(NH3);
+  int gasGeneral = analogRead(A0);
+
+  Serial.print("CO: "); Serial.print(co, 1);
+  Serial.print(" | Metano: "); Serial.println(ch4, 1);
+  Serial.print(" | Etanol: "); Serial.println(etan, 1);
+  Serial.print(" | Hidrogeno: "); Serial.println(h2, 1);
+  Serial.print(" | Amoniaco: "); Serial.println(nh3, 1);
+  Serial.print(" | Gas General: "); Serial.println(gasGeneral);
+
+
+  espSerial.print(co, 1);
+  espSerial.print(",");
+  espSerial.print(ch4, 1);
+  espSerial.print(",");
+  espSerial.print(etan, 1);
+  espSerial.print(",");
+  espSerial.print(h2, 1);
+  espSerial.print(",");
+  espSerial.print(nh3, 1);
+  espSerial.print(",");
+  espSerial.print(gasGeneral); 
+  espSerial.println();
+
+  delay(60000); // Esperar 2 minutos
+}
