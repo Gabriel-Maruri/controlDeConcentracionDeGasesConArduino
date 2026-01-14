@@ -22,6 +22,7 @@ const char* serverName = "http://monitoreogasesdvepc.com/insertar.php";
 #define LED_ROJO 19
 
 DHTesp dhtSensor;
+bool notificacionEnviada = false;
 
 void setup() {
   Serial.begin(115200);
@@ -61,6 +62,9 @@ void loop() {
       String strNH3 = linea.substring(c4 + 1, c5);
       String strGeneral = linea.substring(c5 + 1);
 
+      float valorRaw = strGeneral.toFloat(); 
+      float porcentajeGeneral = (valorRaw * 100.0) / 1023.0;
+
 
       float temp = dhtSensor.getTemperature();
       float hum = dhtSensor.getHumidity();
@@ -73,7 +77,7 @@ void loop() {
       Blynk.virtualWrite(V4, strCH4.toFloat());    
       Blynk.virtualWrite(V5, strH2.toFloat());  
       Blynk.virtualWrite(V6, strNH3.toFloat());
-      Blynk.virtualWrite(V7, strGeneral.toFloat()); 
+      Blynk.virtualWrite(V7, porcentajeGeneral); 
       Blynk.virtualWrite(V8, digitalRead(LED_VERDE) * 255);   
       Blynk.virtualWrite(V9, digitalRead(LED_AMARILLO) * 255); 
       Blynk.virtualWrite(V10, digitalRead(LED_ROJO) * 255);
@@ -92,7 +96,7 @@ void loop() {
                           "&nh3=" + strNH3 + 
                           "&temp=" + String(temp) + 
                           "&hum=" + String(hum) +
-                          "&general=" + strGeneral;
+                          "&gas_general=" + strGeneral;
         
         Serial.println("Enviando: " + postData);
         
@@ -113,25 +117,38 @@ void loop() {
       
       float gasecitoGeneral = strGeneral.toFloat();
 
-      if (gasecitoGeneral >= 0 && gasecitoGeneral <= 350 ) {
+      if (gasecitoGeneral >= 0 && gasecitoGeneral <= 200 ) {
         digitalWrite(LED_VERDE, HIGH); 
         Blynk.virtualWrite(V8, 255);
       }else {
         digitalWrite(LED_VERDE, LOW); Blynk.virtualWrite(V8, 0);
       }
-      if (gasecitoGeneral > 350 && gasecitoGeneral <= 700 ) {
+      if (gasecitoGeneral > 200 && gasecitoGeneral <= 600 ) {
         digitalWrite(LED_AMARILLO, HIGH); 
         Blynk.virtualWrite(V9, 255);
       } else {
         digitalWrite(LED_AMARILLO, LOW); 
         Blynk.virtualWrite(V9, 0);
       }
-      if (gasecitoGeneral > 700){
+      if (gasecitoGeneral > 600){
         digitalWrite(LED_ROJO, HIGH);
          Blynk.virtualWrite(V10, 255);
+
+         if (notificacionEnviada == false) {
+          Serial.println("¡CRITICO! Enviando notificación al celular...");
+          String mensajeAlerta = "¡PELIGRO! Fuga detectada. Nivel General: " + String(gasecitoGeneral);
+          Blynk.logEvent("alerta_fuga", mensajeAlerta); 
+          notificacionEnviada = true;
+          }
       } else {
         digitalWrite(LED_ROJO, LOW); 
         Blynk.virtualWrite(V10, 0);
+
+        if (notificacionEnviada == true) {
+           notificacionEnviada = false;
+           Serial.println("Niveles normalizados. Alarma reseteada.");
+        }
+        
       }
     }
   }
